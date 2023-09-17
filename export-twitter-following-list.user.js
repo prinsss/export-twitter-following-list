@@ -34,6 +34,7 @@
   /** @type {IDBDatabase} */
   let db = null;
 
+  let isList = false;
   let savedCount = 0;
   let targetUser = '';
   let currentType = '';
@@ -72,17 +73,29 @@
 
     previousPathname = pathname;
 
-    // Show the script UI on these pages.
-    const regex = /^\/(.+)\/(following|followers_you_follow|followers|verified_followers)/;
-    const parsed = regex.exec(pathname) || [];
-    const [match, username, type] = parsed;
+    // Show the script UI on these pages:
+    // - User's following list
+    // - User's followers list
+    // - List's member list
+    // - List's followers list
 
-    if (type) {
-      initControlPanel();
-      updateControlPanel({ type, username });
-    } else {
+    const listRegex = /^\/i\/lists\/(.+)\/(followers|members)/;
+    const userRegex = /^\/(.+)\/(following|followers_you_follow|followers|verified_followers)/;
+
+    isList = listRegex.test(pathname);
+    const isUser = userRegex.test(pathname);
+
+    if (!isList && !isUser) {
       destroyControlPanel();
+      return;
     }
+
+    const regex = isList ? listRegex : userRegex;
+    const parsed = regex.exec(pathname) || [];
+    const [match, target, type] = parsed;
+
+    initControlPanel();
+    updateControlPanel({ type, username: isList ? `list_${target}` : target });
   }
 
   // Listen to URL changes.
@@ -150,12 +163,22 @@
 
   function attachToListContainer() {
     // NOTE: This may vary as Twitter upgrades.
-    listContainerDom = document.querySelectorAll(
-      'main[role="main"] div[data-testid="primaryColumn"] section[role="region"] > div > div'
-    )[0];
+    if (isList) {
+      listContainerDom = document.querySelector(
+        'div[role="group"] div[role="dialog"] section[role="region"] > div > div'
+      );
+    } else {
+      listContainerDom = document.querySelector(
+        'main[role="main"] div[data-testid="primaryColumn"] section[role="region"] > div > div'
+      );
+    }
 
     if (!listContainerDom) {
-      error('No list container found.');
+      error(
+        'No list container found. ' +
+          'This may be a problem caused by Twitter updates. Please file an issue on GitHub: ' +
+          'https://github.com/prinsss/export-twitter-following-list/issues'
+      );
       return;
     }
 
@@ -177,11 +200,8 @@
 
   // Hide the script UI and clear all the cache.
   function destroyControlPanel() {
-    const panel = document.getElementById(`${SCRIPT_NAME}-panel`);
-    const style = document.getElementById(`${SCRIPT_NAME}-panel-style`);
-    if (panel) panel.remove();
-    if (style) style.remove();
-
+    document.getElementById(`${SCRIPT_NAME}-panel`)?.remove();
+    document.getElementById(`${SCRIPT_NAME}-panel-style`)?.remove();
     panelDom = null;
     listContainerDom = null;
     currentType = '';
@@ -224,7 +244,7 @@
     panel.innerHTML = `
       <div class="status">
         <p>List type: "<span id="list-type">following</span>"</p>
-        <p>Target user: @<span id="target-user">???</span></p>
+        <p>Target user/list: @<span id="target-user">???</span></p>
         <p>Saved count: <span id="saved-count">0</span></p>
       </div>
       <div class="btn-group">
@@ -370,14 +390,14 @@
     const rows = array
       .map((value, key) => [
         String(key),
-        value.legacy.name,
-        value.legacy.screen_name,
-        value.legacy.profile_image_url_https,
-        value.legacy.following ? 'true' : 'false',
-        value.legacy.followed_by ? 'true' : 'false',
+        value?.legacy?.name,
+        value?.legacy?.screen_name,
+        value?.legacy?.profile_image_url_https,
+        value?.legacy?.following ? 'true' : 'false',
+        value?.legacy?.followed_by ? 'true' : 'false',
         sanitizeProfileDescription(
-          value.legacy.description,
-          value.legacy.entities.description.urls
+          value?.legacy?.description,
+          value?.legacy?.entities?.description?.urls
         ),
         JSON.stringify(value),
       ])
@@ -419,18 +439,18 @@
       const column = document.createElement('tr');
       column.innerHTML = `
         <td>${key}</td>
-        <td>${value.legacy.name}</td>
+        <td>${value?.legacy?.name}</td>
         <td>
-          <a href="https://twitter.com/${value.legacy.screen_name}">
-            ${value.legacy.screen_name}
+          <a href="https://twitter.com/${value?.legacy?.screen_name}">
+            ${value?.legacy?.screen_name}
           </a>
         </td>
-        <td><img src="${value.legacy.profile_image_url_https}"></td>
-        <td>${value.legacy.following ? 'true' : 'false'}</td>
-        <td>${value.legacy.followed_by ? 'true' : 'false'}</td>
+        <td><img src="${value?.legacy?.profile_image_url_https}"></td>
+        <td>${value?.legacy?.following ? 'true' : 'false'}</td>
+        <td>${value?.legacy?.followed_by ? 'true' : 'false'}</td>
         <td>${sanitizeProfileDescription(
-          value.legacy.description,
-          value.legacy.entities.description.urls
+          value?.legacy?.description,
+          value?.legacy?.entities?.description?.urls
         )}</td>
         <td>
           <details>
@@ -467,24 +487,36 @@
   }
 
   async function onExportCSV() {
-    const filename = `twitter-${targetUser}-${currentType}-${Date.now()}.csv`;
-    info('Exporting to CSV file: ' + filename);
-    const content = await exportToCSVFormat();
-    saveFile(filename, content);
+    try {
+      const filename = `twitter-${targetUser}-${currentType}-${Date.now()}.csv`;
+      info('Exporting to CSV file: ' + filename);
+      const content = await exportToCSVFormat();
+      saveFile(filename, content);
+    } catch (err) {
+      error(err.message, err);
+    }
   }
 
   async function onExportJSON() {
-    const filename = `twitter-${targetUser}-${currentType}-${Date.now()}.json`;
-    info('Exporting to JSON file: ' + filename);
-    const content = await exportToJSONFormat();
-    saveFile(filename, content);
+    try {
+      const filename = `twitter-${targetUser}-${currentType}-${Date.now()}.json`;
+      info('Exporting to JSON file: ' + filename);
+      const content = await exportToJSONFormat();
+      saveFile(filename, content);
+    } catch (err) {
+      error(err.message, err);
+    }
   }
 
   async function onExportHTML() {
-    const filename = `twitter-${targetUser}-${currentType}-${Date.now()}.html`;
-    info('Exporting to HTML file: ' + filename);
-    const content = await exportToHTMLFormat();
-    saveFile(filename, content);
+    try {
+      const filename = `twitter-${targetUser}-${currentType}-${Date.now()}.html`;
+      info('Exporting to HTML file: ' + filename);
+      const content = await exportToHTMLFormat();
+      saveFile(filename, content);
+    } catch (err) {
+      error(err.message, err);
+    }
   }
 
   /*
@@ -627,21 +659,50 @@
       // https://twitter.com/i/api/graphql/rRXFSG5vR6drKr5M37YOTw/Followers
       if (/api\/graphql\/.+\/Followers/.test(url)) {
         this.addEventListener('load', function () {
-          parseTwitterAPIResponse(this.responseText);
+          parseTwitterAPIResponse(
+            this.responseText,
+            (json) => json.data.user.result.timeline.timeline.instructions
+          );
         });
       }
 
       // https://twitter.com/i/api/graphql/kXi37EbqWokFUNypPHhQDQ/BlueVerifiedFollowers
       if (/api\/graphql\/.+\/BlueVerifiedFollowers/.test(url)) {
         this.addEventListener('load', function () {
-          parseTwitterAPIResponse(this.responseText);
+          parseTwitterAPIResponse(
+            this.responseText,
+            (json) => json.data.user.result.timeline.timeline.instructions
+          );
         });
       }
 
       // https://twitter.com/i/api/graphql/iSicc7LrzWGBgDPL0tM_TQ/Following
       if (/api\/graphql\/.+\/Following/.test(url)) {
         this.addEventListener('load', function () {
-          parseTwitterAPIResponse(this.responseText);
+          parseTwitterAPIResponse(
+            this.responseText,
+            (json) => json.data.user.result.timeline.timeline.instructions
+          );
+        });
+      }
+
+      // https://twitter.com/i/api/graphql/-5VwQkb7axZIxFkFS44iWw/ListMembers
+      if (/api\/graphql\/.+\/ListMembers/.test(url)) {
+        this.addEventListener('load', function () {
+          parseTwitterAPIResponse(
+            this.responseText,
+            (json) => json.data.list.members_timeline.timeline.instructions
+          );
+        });
+      }
+
+      // https://twitter.com/i/api/graphql/B9F2680qyuI6keStbcgv6w/ListSubscribers
+      if (/api\/graphql\/.+\/ListSubscribers/.test(url)) {
+        this.addEventListener('load', function () {
+          parseTwitterAPIResponse(
+            this.responseText,
+            (json) => json.data.list.subscribers_timeline.timeline.instructions
+          );
         });
       }
 
@@ -653,12 +714,12 @@
 
   // We parse the users' information in the API response and write them to the local database.
   // The browser's IndexedDB is used to store the data persistently.
-  function parseTwitterAPIResponse(text) {
+  function parseTwitterAPIResponse(text, extractor) {
     try {
       const json = JSON.parse(text);
 
       // NOTE: This may vary as Twitter upgrades.
-      const instructions = json.data.user.result.timeline.timeline.instructions;
+      const instructions = extractor(json);
       const entries = instructions.find((item) => item.type === 'TimelineAddEntries').entries;
 
       const users = entries
@@ -671,7 +732,11 @@
 
       insertUserDataIntoDatabase(users);
     } catch (err) {
-      error('Failed to parse API response. Message:' + err.message);
+      error(
+        `Failed to parse API response. (Message: ${err.message}) ` +
+          'This may be a problem caused by Twitter updates. Please file an issue on GitHub: ' +
+          'https://github.com/prinsss/export-twitter-following-list/issues'
+      );
     }
   }
 
@@ -683,7 +748,7 @@
 
   // Escape characters for CSV file.
   function csvEscapeStr(s) {
-    return `"${s.replace(/\"/g, '""').replace(/\n/g, '\\n')}"`;
+    return `"${s.replace(/\"/g, '""').replace(/\n/g, '\\n').replace(/\r/g, '\\r')}"`;
   }
 
   // Save a text file to disk.
@@ -704,8 +769,10 @@
   // Replace any https://t.co/ link in the string with its corresponding real URL.
   function sanitizeProfileDescription(description, urls) {
     let str = description;
-    for (const { url, expanded_url } of urls) {
-      str = str.replace(url, expanded_url);
+    if (urls?.length) {
+      for (const { url, expanded_url } of urls) {
+        str = str.replace(url, expanded_url);
+      }
     }
     return str;
   }

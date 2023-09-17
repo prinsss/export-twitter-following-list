@@ -9,8 +9,8 @@
 // @grant        unsafeWindow
 // @run-at       document-start
 // @supportURL   https://github.com/prinsss/export-twitter-following-list/issues
-// @updateURL    https://raw.githubusercontent.com/prinsss/export-twitter-following-list/master/dist/export-twitter-following-list.user.js
-// @downloadURL  https://raw.githubusercontent.com/prinsss/export-twitter-following-list/master/dist/export-twitter-following-list.user.js
+// @updateURL    https://raw.githubusercontent.com/prinsss/export-twitter-following-list/master/export-twitter-following-list.user.js
+// @downloadURL  https://raw.githubusercontent.com/prinsss/export-twitter-following-list/master/export-twitter-following-list.user.js
 // @license      MIT
 // ==/UserScript==
 
@@ -103,7 +103,7 @@
     new MutationObserver(bootstrap).observe(document.head, {
       childList: true,
     });
-    log('Script ready.');
+    info('Script ready.');
   }
 
   /*
@@ -443,7 +443,7 @@
         <td>${key}</td>
         <td>${value?.legacy?.name}</td>
         <td>
-          <a href="https://twitter.com/${value?.legacy?.screen_name}">
+          <a href="https://twitter.com/${value?.legacy?.screen_name}" target="_blank">
             ${value?.legacy?.screen_name}
           </a>
         </td>

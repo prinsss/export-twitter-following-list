@@ -254,6 +254,7 @@
         <button id="export-csv">Export as CSV</button>
         <button id="export-json">Export as JSON</button>
         <button id="export-html">Export as HTML</button>
+        <button id="dump-database">Dump Database</button>
       </div>
       <pre id="export-logs" class="logs"></pre>
       <pre id="export-errors" class="logs"></pre>
@@ -299,6 +300,7 @@
     panel.querySelector('#export-csv').addEventListener('click', onExportCSV);
     panel.querySelector('#export-json').addEventListener('click', onExportJSON);
     panel.querySelector('#export-html').addEventListener('click', onExportHTML);
+    panel.querySelector('#dump-database').addEventListener('click', onDumpDatabase);
   }
 
   // The preview modal.
@@ -519,6 +521,17 @@
     }
   }
 
+  async function onDumpDatabase() {
+    try {
+      const filename = `${SCRIPT_NAME}-database-dump-${Date.now()}.json`;
+      info('Exporting IndexedDB to file: ' + filename);
+      const obj = await dumpDatabase();
+      saveFile(filename, JSON.stringify(obj, undefined, '  '));
+    } catch (err) {
+      error(err.message, err);
+    }
+  }
+
   /*
   |--------------------------------------------------------------------------
   | Database Management
@@ -639,6 +652,39 @@
 
     await Promise.all(promises);
     return sortedDetailedList;
+  }
+
+  // Get a user's record from database by his username.
+  async function dumpDatabase() {
+    if (!db) {
+      error('The database is not initialized.');
+      return;
+    }
+
+    const transaction = db.transaction('users', 'readonly');
+    const objectStore = transaction.objectStore('users');
+
+    const request = objectStore.openCursor();
+    const records = new Map();
+
+    return new Promise((resolve) => {
+      request.onsuccess = (event) => {
+        const cursor = event.target.result;
+
+        if (cursor) {
+          records.set(cursor.value.rest_id, cursor.value);
+          cursor.continue();
+        } else {
+          // No more results.
+          resolve(Object.fromEntries(records.entries()));
+        }
+      };
+
+      request.onerror = (event) => {
+        error(`Failed to query user ${username} from database.`, event);
+        resolve(null);
+      };
+    });
   }
 
   /*

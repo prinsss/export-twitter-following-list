@@ -13,6 +13,10 @@ The script supports exporting:
 - List's members list (列表包含的用户)
 - List's followers list (关注此列表的用户)
 
+> Introducing my new project [twitter-web-exporter](https://github.com/prinsss/twitter-web-exporter), a completely rewritten version of this script, which is a more powerful tool for exporting Twitter data, including tweets, replies, likes, bookmarks, following, followers and more.
+>
+> 广告：全新脚本 [twitter-web-exporter](https://github.com/prinsss/twitter-web-exporter) 现已发布，不仅支持本脚本的全部功能，还可以导出推文、回复、点赞、书签等更多数据。
+
 ## Installation / 安装
 
 1. Install the browser extension [Tampermonkey](https://www.tampermonkey.net/) (安装浏览器扩展 [Tampermonkey](https://www.tampermonkey.net/))
